@@ -47,8 +47,8 @@
   .plan-btn .meta .exs{font-size:12px;color:var(--text-dim);margin-top:2px;}
   .resume-banner{background:var(--surface2);border:1px solid var(--accent-dim);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;}
   .resume-banner button{background:var(--accent);color:#1a1200;border:none;border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;}
-  .link-row{margin-top:22px;display:flex;gap:10px;}
-  .link-row button{flex:1;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px;font-size:13px;}
+  .link-row{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .link-row button{background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px 8px;font-size:12.5px;}
 
   .session-list{padding:14px;display:flex;flex-direction:column;gap:12px;}
   .ex-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;}
@@ -112,6 +112,38 @@
   .hist-entry .p{font-size:11px;color:var(--text-dim);margin-bottom:6px;}
   .hist-entry .sets-line{font-size:13px;font-variant-numeric:tabular-nums;}
   .empty{color:var(--text-dim);font-size:13px;text-align:center;padding:30px 10px;}
+
+  .chart-wrap{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;}
+  .chart-wrap .ct{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+  .chart-wrap svg{width:100%;height:auto;display:block;}
+
+  .pe-row{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+  .pe-row input.pe-name{flex:1;background:none;border:none;color:var(--text);font-family:'Oswald';font-size:14px;text-transform:uppercase;padding:0;min-width:0;}
+  .pe-row .pe-rest-input{width:48px;background:var(--surface2);border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12px;text-align:center;padding:5px 2px;}
+  .pe-row button{flex-shrink:0;background:var(--surface2);border:1px solid var(--line);color:var(--text-dim);border-radius:6px;font-size:12px;padding:5px 7px;}
+  .pe-addrow-btn{width:100%;background:none;border:1px dashed var(--line);color:var(--text-dim);border-radius:10px;padding:12px;font-size:13px;margin:4px 0 16px;}
+  .pe-reset-btn{width:100%;background:none;border:none;color:var(--text-dim);font-size:12px;text-decoration:underline;padding:8px;}
+  .pe-planname{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;color:var(--text);font-family:'Oswald';font-size:16px;padding:12px;margin-bottom:14px;}
+
+  .stat-row{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .stat-row .nm{font-family:'Oswald';font-size:14px;flex:1;text-transform:uppercase;}
+  .stat-row .pr{font-family:'Oswald';font-size:16px;color:var(--accent);font-variant-numeric:tabular-nums;}
+  .stat-row .dt{font-size:11px;color:var(--text-dim);}
+  .stat-summary{display:flex;gap:10px;margin-bottom:18px;}
+  .stat-summary .box{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 10px;text-align:center;}
+  .stat-summary .box .n{font-family:'Oswald';font-size:24px;color:var(--accent);}
+  .stat-summary .box .l{font-size:11px;color:var(--text-dim);margin-top:2px;}
+
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-head button{background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 14px;font-size:16px;}
+  .cal-head .m{font-family:'Oswald';font-size:16px;text-transform:capitalize;}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;}
+  .cal-dow{text-align:center;font-size:11px;color:var(--text-dim);padding-bottom:4px;}
+  .cal-day{aspect-ratio:1;background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;position:relative;}
+  .cal-day.has{border-color:var(--accent);}
+  .cal-day .dn{color:var(--text-dim);}
+  .cal-day .pl{font-family:'Oswald';font-size:13px;color:var(--accent);margin-top:2px;}
+  .cal-day.empty{background:none;border:none;}
 </style>
 </head>
 <body>
@@ -147,8 +179,11 @@ const DEFAULT_PLANS = {
 let sessions = [];
 let active = null;
 let restOverrides = {};
+let PLANS = null;
 let view = 'home';
 let timer = { running:false, remaining:0, total:0, entryIdx:-1, exName:'', handle:null };
+
+function clonePlans(){ return JSON.parse(JSON.stringify(DEFAULT_PLANS)); }
 
 const LS_PREFIX = 'trening_app_';
 const hasClaudeStorage = (typeof window.storage !== 'undefined') && window.storage && typeof window.storage.get === 'function';
@@ -215,6 +250,9 @@ function render(){
   else if(view==='session') root.innerHTML = renderSession();
   else if(view==='history') root.innerHTML = renderHistory();
   else if(view==='quickadd') root.innerHTML = renderQuickAdd();
+  else if(view==='stats') root.innerHTML = renderStats();
+  else if(view==='calendar') root.innerHTML = renderCalendar();
+  else if(view==='editplans') root.innerHTML = renderPlansEdit();
   bindEvents();
   renderRestBar();
 }
@@ -233,8 +271,8 @@ function renderHome(){
   }
   let lastInfo = last ? `Ostatni trening: ${fmtDate(last.date)} — Trening ${last.plan}` : 'Brak zapisanych treningów.';
   let storageNote = !hasClaudeStorage ? `<div style="font-size:11px;color:var(--text-dim);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:16px;">Dane zapisują się lokalnie w tej przeglądarce na tym urządzeniu. Otwieraj apkę zawsze tym samym linkiem/plikiem, żeby mieć dostęp do historii.</div>` : '';
-  let grid = Object.keys(DEFAULT_PLANS).map(key=>{
-    const p = DEFAULT_PLANS[key];
+  let grid = Object.keys(PLANS).map(key=>{
+    const p = PLANS[key];
     return `<button class="plan-btn" data-action="start" data-plan="${key}">
       <div class="letter">${key}</div>
       <div class="meta">
@@ -252,13 +290,16 @@ function renderHome(){
       <div class="plan-grid">${grid}</div>
       <div class="link-row">
         <button data-action="history">Historia ćwiczeń</button>
-        <button data-action="quickadd">+ Dodaj starą sesję</button>
+        <button data-action="stats">Statystyki / PR-y</button>
+        <button data-action="calendar">Kalendarz</button>
+        <button data-action="editplans">Edytuj plany</button>
+        <button data-action="quickadd" style="grid-column:1/-1;">+ Dodaj starą sesję</button>
       </div>
     </div>`;
 }
 
 function renderSession(){
-  const plan = DEFAULT_PLANS[active.plan];
+  const plan = PLANS[active.plan];
   const cards = active.entries.map((entry, idx)=>{
     const planEx = plan.exercises.find(e=>e.id===entry.planExerciseId);
     const rest = effectiveRest(entry.performedName, planEx.rest);
@@ -310,7 +351,7 @@ function renderSession(){
 
 function allKnownExerciseNames(){
   const set = new Set();
-  Object.values(DEFAULT_PLANS).forEach(p=>p.exercises.forEach(e=>set.add(e.name)));
+  Object.values(PLANS).forEach(p=>p.exercises.forEach(e=>set.add(e.name)));
   sessions.forEach(s=>s.entries.forEach(e=>set.add(e.performedName)));
   return Array.from(set).sort((a,b)=>a.localeCompare(b,'pl'));
 }
@@ -323,7 +364,7 @@ function newQuickAddRow(name, unit){
 
 function renderQuickAdd(){
   const planPicked = quickAdd.plan;
-  const planBtns = Object.keys(DEFAULT_PLANS).map(k=>
+  const planBtns = Object.keys(PLANS).map(k=>
     `<button class="${planPicked===k?'active':''}" data-action="qa-plan" data-plan="${k}">${k}</button>`
   ).join('');
   let rowsHtml = '';
@@ -358,6 +399,176 @@ function renderQuickAdd(){
   `;
 }
 
+function chartDataFor(name){
+  const pts = [];
+  sessions.forEach(s=>{
+    let best = null;
+    s.entries.forEach(e=>{
+      if(e.performedName!==name) return;
+      e.sets.forEach(set=>{
+        const metric = set.weight!=null ? set.weight : set.value;
+        if(metric==null) return;
+        if(best===null || metric>best) best = metric;
+      });
+    });
+    if(best!==null) pts.push({date:s.date, value:best});
+  });
+  pts.sort((a,b)=> a.date<b.date?-1:a.date>b.date?1:0);
+  return pts;
+}
+
+function miniChartSvg(pts, unitSuffix){
+  if(pts.length<2) return '';
+  const w=300,h=100,pad=10;
+  const vals = pts.map(p=>p.value);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const range = (max-min) || 1;
+  const stepX = (w-pad*2)/(pts.length-1);
+  const coords = pts.map((p,i)=>{
+    const x = pad + i*stepX;
+    const y = h-pad - ((p.value-min)/range)*(h-pad*2);
+    return {x,y,v:p.value};
+  });
+  const line = coords.map(c=>`${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const dots = coords.map(c=>`<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3" fill="var(--accent)"></circle>`).join('');
+  const first = pts[0], last = pts[pts.length-1];
+  return `<div class="chart-wrap">
+    <div class="ct">Najlepsza seria w treningu (${first.value}${unitSuffix} → ${last.value}${unitSuffix})</div>
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2"></polyline>
+      ${dots}
+    </svg>
+  </div>`;
+}
+
+function computeStats(){
+  const prMap = {};
+  sessions.forEach(s=>s.entries.forEach(e=>{
+    e.sets.forEach(set=>{
+      const metric = set.weight!=null ? set.weight : set.value;
+      if(metric==null) return;
+      const unit = set.weight!=null ? 'kg' : (e.unit==='sec' ? 's' : 'powt.');
+      const cur = prMap[e.performedName];
+      if(!cur || metric>cur.value){
+        prMap[e.performedName] = { value:metric, unit, date:s.date };
+      }
+    });
+  }));
+  return prMap;
+}
+
+function renderStats(){
+  const prMap = computeStats();
+  const names = Object.keys(prMap).sort((a,b)=>a.localeCompare(b,'pl'));
+  const now = new Date();
+  const ym = now.toISOString().slice(0,7);
+  const thisMonthCount = sessions.filter(s=>s.date.slice(0,7)===ym).length;
+  const rows = names.length ? names.map(n=>{
+    const pr = prMap[n];
+    return `<div class="stat-row">
+      <div class="nm">${n}</div>
+      <div style="text-align:right;">
+        <div class="pr">${pr.value}${pr.unit}</div>
+        <div class="dt">${fmtDate(pr.date)}</div>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">Brak jeszcze żadnych zapisanych serii.</div>';
+  return `
+    <div class="topbar">
+      <div class="plan-label">Statystyki</div>
+      <button class="icon-btn" data-action="home">Wróć</button>
+    </div>
+    <div class="history-view">
+      <div class="stat-summary">
+        <div class="box"><div class="n">${sessions.length}</div><div class="l">treningów łącznie</div></div>
+        <div class="box"><div class="n">${thisMonthCount}</div><div class="l">w tym miesiącu</div></div>
+      </div>
+      <div class="ct" style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Rekordy (najlepsza seria)</div>
+      ${rows}
+    </div>
+  `;
+}
+
+let calMonth = null;
+
+function sessionsByDate(){
+  const map = {};
+  sessions.forEach(s=>{
+    if(!map[s.date]) map[s.date] = [];
+    map[s.date].push(s);
+  });
+  return map;
+}
+
+function renderCalendar(){
+  if(!calMonth) calMonth = new Date();
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const first = new Date(y,m,1);
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  let startOffset = first.getDay(); // 0=Sun
+  startOffset = startOffset===0 ? 6 : startOffset-1; // Monday-first
+  const byDate = sessionsByDate();
+  const monthLabel = first.toLocaleDateString('pl-PL', {month:'long', year:'numeric'});
+  const dows = ['pon','wt','śr','czw','pt','sob','nie'];
+  let cells = dows.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  for(let i=0;i<startOffset;i++) cells += `<div class="cal-day empty"></div>`;
+  for(let d=1; d<=daysInMonth; d++){
+    const iso = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const daySessions = byDate[iso];
+    const has = daySessions && daySessions.length;
+    const label = has ? daySessions.map(s=>s.plan).join('/') : '';
+    cells += `<div class="cal-day ${has?'has':''}" ${has?`data-action="cal-day" data-date="${iso}"`:''}>
+      <div class="dn">${d}</div>
+      ${has ? `<div class="pl">${label}</div>` : ''}
+    </div>`;
+  }
+  return `
+    <div class="topbar">
+      <div class="plan-label">Kalendarz</div>
+      <button class="icon-btn" data-action="home">Wróć</button>
+    </div>
+    <div class="history-view">
+      <div class="cal-head">
+        <button data-action="cal-prev">‹</button>
+        <div class="m">${monthLabel}</div>
+        <button data-action="cal-next">›</button>
+      </div>
+      <div class="cal-grid">${cells}</div>
+    </div>
+  `;
+}
+
+let plansEditTab = 'A';
+
+function renderPlansEdit(){
+  const plan = PLANS[plansEditTab];
+  const tabs = Object.keys(PLANS).map(k=>
+    `<button class="${plansEditTab===k?'active':''}" data-action="pe-tab" data-plan="${k}">${k}</button>`
+  ).join('');
+  const rows = plan.exercises.map((ex, idx)=>`
+    <div class="pe-row">
+      <button data-action="pe-up" data-idx="${idx}" ${idx===0?'disabled style="opacity:.3;"':''}>↑</button>
+      <button data-action="pe-down" data-idx="${idx}" ${idx===plan.exercises.length-1?'disabled style="opacity:.3;"':''}>↓</button>
+      <input class="pe-name" data-action="pe-rename" data-idx="${idx}" value="${ex.name}">
+      <button data-action="pe-unit" data-idx="${idx}">${ex.unit==='sec'?'sek':'powt'}</button>
+      <input class="pe-rest-input" data-action="pe-rest" data-idx="${idx}" type="number" value="${ex.rest}" title="przerwa (s)">
+      <button data-action="pe-del" data-idx="${idx}">×</button>
+    </div>`).join('');
+  return `
+    <div class="topbar">
+      <div class="plan-label">Edytuj plany</div>
+      <button class="icon-btn" data-action="home">Wróć</button>
+    </div>
+    <div class="history-view">
+      <input class="pe-planname" data-action="pe-planname" value="${plan.name}">
+      <div class="qa-plan-row">${tabs}</div>
+      ${rows}
+      <button class="pe-addrow-btn" data-action="pe-add">+ Dodaj ćwiczenie do planu ${plansEditTab}</button>
+      <button class="pe-reset-btn" data-action="pe-reset">Przywróć domyślne ćwiczenia dla planu ${plansEditTab}</button>
+    </div>
+  `;
+}
+
 function renderHistory(selected){
   const names = allKnownExerciseNames();
   const sel = selected || names[0] || '';
@@ -365,6 +576,11 @@ function renderHistory(selected){
   let rows = '';
   const matches = [];
   sessions.forEach(s=>s.entries.forEach(e=>{ if(e.performedName===sel) matches.push({s,e}); }));
+  let chartHtml = '';
+  if(matches.length>0){
+    const unitSuffix = matches[matches.length-1].e.sets.some(x=>x.weight!=null) ? 'kg' : (matches[matches.length-1].e.unit==='sec'?'s':'');
+    chartHtml = miniChartSvg(chartDataFor(sel), unitSuffix);
+  }
   matches.reverse();
   if(matches.length===0){
     rows = `<div class="empty">Brak zapisanych wyników dla tego ćwiczenia.</div>`;
@@ -383,6 +599,7 @@ function renderHistory(selected){
     </div>
     <div class="history-view">
       <select id="histSelect">${opts}</select>
+      ${chartHtml}
       <div id="histRows">${rows}</div>
     </div>
   `;
@@ -501,7 +718,7 @@ function bindEvents(){
       if(a==='start'){
         const key = el.dataset.plan;
         if(active && !confirm('Masz niezakończony trening. Zacząć nowy i utracić postęp?')) return;
-        const plan = DEFAULT_PLANS[key];
+        const plan = PLANS[key];
         active = {
           id: uid('sess'),
           date: todayISO(),
@@ -521,6 +738,61 @@ function bindEvents(){
       else if(a==='resume'){ view='session'; render(); }
       else if(a==='home'){ view='home'; render(); }
       else if(a==='history'){ view='history'; render(); }
+      else if(a==='stats'){ view='stats'; render(); }
+      else if(a==='calendar'){ calMonth = new Date(); view='calendar'; render(); }
+      else if(a==='editplans'){ plansEditTab='A'; view='editplans'; render(); }
+      else if(a==='cal-prev'){ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); render(); }
+      else if(a==='cal-next'){ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); render(); }
+      else if(a==='cal-day'){
+        const iso = el.dataset.date;
+        const day = sessionsByDate()[iso];
+        const lines = day.map(s=>{
+          const exLines = s.entries.filter(e=>e.sets.length).map(e=>`• ${e.performedName}: ${setsSummary(e.sets, e.unit)}`).join('\n');
+          return `Trening ${s.plan}\n${exLines}`;
+        }).join('\n\n');
+        alert(fmtDate(iso)+'\n\n'+lines);
+      }
+      else if(a==='pe-tab'){ plansEditTab = el.dataset.plan; render(); }
+      else if(a==='pe-add'){
+        PLANS[plansEditTab].exercises.push({ id: uid('ex'), name:'Nowe ćwiczenie', unit:'reps', rest:90 });
+        await stSet('plans', PLANS);
+        render();
+      }
+      else if(a==='pe-del'){
+        if(!confirm('Usunąć to ćwiczenie z planu?')) return;
+        PLANS[plansEditTab].exercises.splice(+el.dataset.idx,1);
+        await stSet('plans', PLANS);
+        render();
+      }
+      else if(a==='pe-unit'){
+        const idx = +el.dataset.idx;
+        const ex = PLANS[plansEditTab].exercises[idx];
+        ex.unit = ex.unit==='sec' ? 'reps' : 'sec';
+        await stSet('plans', PLANS);
+        render();
+      }
+      else if(a==='pe-up'){
+        const idx = +el.dataset.idx;
+        if(idx===0) return;
+        const arr = PLANS[plansEditTab].exercises;
+        [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]];
+        await stSet('plans', PLANS);
+        render();
+      }
+      else if(a==='pe-down'){
+        const idx = +el.dataset.idx;
+        const arr = PLANS[plansEditTab].exercises;
+        if(idx>=arr.length-1) return;
+        [arr[idx+1], arr[idx]] = [arr[idx], arr[idx+1]];
+        await stSet('plans', PLANS);
+        render();
+      }
+      else if(a==='pe-reset'){
+        if(!confirm('Przywrócić domyślne ćwiczenia dla planu '+plansEditTab+'? Utracisz obecne zmiany w tym planie.')) return;
+        PLANS[plansEditTab] = clonePlans()[plansEditTab];
+        await stSet('plans', PLANS);
+        render();
+      }
       else if(a==='quickadd'){
         quickAdd = { date: todayISO(), plan: null, rows: [] };
         view='quickadd'; render();
@@ -528,7 +800,7 @@ function bindEvents(){
       else if(a==='qa-plan'){
         const key = el.dataset.plan;
         quickAdd.plan = key;
-        quickAdd.rows = DEFAULT_PLANS[key].exercises.map(ex=>newQuickAddRow(ex.name, ex.unit));
+        quickAdd.rows = PLANS[key].exercises.map(ex=>newQuickAddRow(ex.name, ex.unit));
         render();
       }
       else if(a==='qa-addrow'){
@@ -587,7 +859,7 @@ function bindEvents(){
         const entry = active.entries[idx];
         entry.sets.push({ value:+val, weight: wInput.value===''? null : +wInput.value, note:'' });
         await saveActive();
-        const planEx = DEFAULT_PLANS[active.plan].exercises.find(e=>e.id===entry.planExerciseId);
+        const planEx = PLANS[active.plan].exercises.find(e=>e.id===entry.planExerciseId);
         const rest = effectiveRest(entry.performedName, planEx.rest);
         startRest(rest, idx, entry.performedName);
         render();
@@ -598,7 +870,7 @@ function bindEvents(){
         const lastSet = entry.sets[entry.sets.length-1];
         entry.sets.push({ ...lastSet, note:'' });
         await saveActive();
-        const planEx = DEFAULT_PLANS[active.plan].exercises.find(e=>e.id===entry.planExerciseId);
+        const planEx = PLANS[active.plan].exercises.find(e=>e.id===entry.planExerciseId);
         const rest = effectiveRest(entry.performedName, planEx.rest);
         startRest(rest, idx, entry.performedName);
         render();
@@ -621,7 +893,7 @@ function bindEvents(){
       }
       else if(a==='editrest'){
         const name = el.dataset.name;
-        const cur = restOverrides[name] != null ? restOverrides[name] : DEFAULT_PLANS[active.plan].exercises.find(x=>x.name===active.entries[+el.dataset.idx].plannedName)?.rest;
+        const cur = restOverrides[name] != null ? restOverrides[name] : PLANS[active.plan].exercises.find(x=>x.name===active.entries[+el.dataset.idx].plannedName)?.rest;
         const nn = prompt('Domyślna przerwa (sekundy) dla: '+name, cur);
         if(nn===null || nn==='' || isNaN(+nn)) return;
         restOverrides[name] = +nn;
@@ -658,6 +930,26 @@ function bindEvents(){
   document.querySelectorAll('[data-action="qa-ctx"]').forEach(el=>{
     el.onchange = ()=>{ quickAdd.rows[+el.dataset.idx].context = el.value; };
   });
+  document.querySelectorAll('[data-action="pe-rename"]').forEach(el=>{
+    el.onchange = async ()=>{
+      PLANS[plansEditTab].exercises[+el.dataset.idx].name = el.value || 'Ćwiczenie';
+      await stSet('plans', PLANS);
+    };
+  });
+  document.querySelectorAll('[data-action="pe-rest"]').forEach(el=>{
+    el.onchange = async ()=>{
+      const v = +el.value;
+      PLANS[plansEditTab].exercises[+el.dataset.idx].rest = isNaN(v) ? 90 : v;
+      await stSet('plans', PLANS);
+    };
+  });
+  const peNameEl = document.querySelector('[data-action="pe-planname"]');
+  if(peNameEl){
+    peNameEl.onchange = async ()=>{
+      PLANS[plansEditTab].name = peNameEl.value || ('Trening '+plansEditTab);
+      await stSet('plans', PLANS);
+    };
+  }
   const qaDateEl = document.getElementById('qaDate');
   if(qaDateEl){ qaDateEl.onchange = ()=>{ quickAdd.date = qaDateEl.value; }; }
   const histSel = document.getElementById('histSelect');
@@ -684,6 +976,7 @@ window.addEventListener('error', (e)=>{ showFatalError(e.message||e); });
     sessions = await stGet('sessions', []);
     active = await stGet('activeSession', null);
     restOverrides = await stGet('restOverrides', {});
+    PLANS = await stGet('plans', clonePlans());
     view = 'home';
     render();
   } catch(e){
