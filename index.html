@@ -108,7 +108,8 @@
   .qa-save-bar button{width:100%;background:var(--good);border:none;color:#0f2119;font-weight:700;font-size:15px;border-radius:12px;padding:14px;font-family:'Oswald';letter-spacing:.03em;text-transform:uppercase;}
   .history-view select{width:100%;background:var(--surface);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:12px;font-size:14px;margin-bottom:16px;}
   .hist-entry{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:10px;}
-  .hist-entry .d{font-family:'Oswald';font-size:13px;color:var(--accent);}
+  .hist-entry .d{font-family:'Oswald';font-size:13px;color:var(--accent);display:flex;justify-content:space-between;}
+  .hist-entry .edit-hint{font-size:11px;color:var(--text-dim);text-decoration:underline;}
   .hist-entry .p{font-size:11px;color:var(--text-dim);margin-bottom:6px;}
   .hist-entry .sets-line{font-size:13px;font-variant-numeric:tabular-nums;}
   .empty{color:var(--text-dim);font-size:13px;text-align:center;padding:30px 10px;}
@@ -253,6 +254,7 @@ function render(){
   else if(view==='stats') root.innerHTML = renderStats();
   else if(view==='calendar') root.innerHTML = renderCalendar();
   else if(view==='editplans') root.innerHTML = renderPlansEdit();
+  else if(view==='editsession') root.innerHTML = renderEditSession();
   bindEvents();
   renderRestBar();
 }
@@ -586,8 +588,8 @@ function renderHistory(selected){
     rows = `<div class="empty">Brak zapisanych wyników dla tego ćwiczenia.</div>`;
   } else {
     rows = matches.map(({s,e})=>`
-      <div class="hist-entry">
-        <div class="d">${fmtDate(s.date)}</div>
+      <div class="hist-entry" data-action="edit-session" data-sessid="${s.id}">
+        <div class="d"><span>${fmtDate(s.date)}</span><span class="edit-hint">✎ edytuj</span></div>
         <div class="p">Trening ${s.plan}${e.context ? ' · '+e.context : ''}</div>
         <div class="sets-line">${setsSummary(e.sets, e.unit)}</div>
       </div>`).join('');
@@ -709,6 +711,59 @@ function parseSetsInput(text, unit){
   }).filter(Boolean);
 }
 
+async function saveSessions(){ await stSet('sessions', sessions); }
+
+let editingSessionId = null;
+function findSession(id){ return sessions.find(s=>s.id===id); }
+
+function renderEditSession(){
+  const s = findSession(editingSessionId);
+  if(!s){ view='history'; return renderHistory(); }
+  const cards = s.entries.map((entry, idx)=>{
+    const setsHtml = entry.sets.map((set, si)=>{
+      let val = set.value + (entry.unit==='sec' ? ' s' : '');
+      let w = (set.weight!=null && set.weight!=='') ? ' × '+set.weight+' kg' : '';
+      return `<div class="set-row">
+        <div class="idx">${si+1}</div>
+        <div class="val" data-action="es-editval" data-idx="${idx}" data-si="${si}">${val}${w}</div>
+        ${set.note ? `<div class="note" data-action="es-editval" data-idx="${idx}" data-si="${si}">${set.note}</div>` : ''}
+        <button class="del" data-action="es-delset" data-idx="${idx}" data-si="${si}">×</button>
+      </div>`;
+    }).join('');
+    return `<div class="ex-card">
+      <div class="ex-head">
+        <div style="flex:1;">
+          <input class="ex-name-input" data-action="es-rename" data-idx="${idx}" value="${entry.performedName}">
+        </div>
+        <button class="rest-badge" data-action="es-unit" data-idx="${idx}">${entry.unit==='sec'?'sekundy':'powt.'}</button>
+        <button class="qa-del-row" data-action="es-delentry" data-idx="${idx}">×</button>
+      </div>
+      <input class="ctx-input" placeholder="uwaga / lokalizacja" data-action="es-ctx" data-idx="${idx}" value="${entry.context||''}">
+      <div class="sets">${setsHtml || '<div class="empty" style="padding:10px;">Brak serii.</div>'}</div>
+      <div class="add-set">
+        <input type="number" inputmode="decimal" placeholder="${entry.unit==='sec'?'sek':'powt'}" data-role="es-val" data-idx="${idx}">
+        <input type="number" inputmode="decimal" placeholder="kg" data-role="es-weight" data-idx="${idx}">
+        <button data-action="es-addset" data-idx="${idx}">Dodaj</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="topbar">
+      <div>
+        <div class="plan-label">Edycja: Trening ${s.plan}</div>
+      </div>
+      <button class="icon-btn" data-action="history">Gotowe</button>
+    </div>
+    <div class="session-list">
+      <input type="date" class="qa-date-input" id="esDate" value="${s.date}">
+      ${cards}
+      <button class="qa-addrow-btn" data-action="es-addentry">+ Dodaj ćwiczenie do tej sesji</button>
+      <button class="pe-reset-btn" data-action="es-delsession" style="color:var(--rest);">Usuń całą sesję</button>
+    </div>
+  `;
+}
+
 async function saveActive(){ await stSet('activeSession', active); }
 
 function bindEvents(){
@@ -751,6 +806,73 @@ function bindEvents(){
           return `Trening ${s.plan}\n${exLines}`;
         }).join('\n\n');
         alert(fmtDate(iso)+'\n\n'+lines);
+      }
+      else if(a==='edit-session'){
+        editingSessionId = el.dataset.sessid;
+        view = 'editsession'; render();
+      }
+      else if(a==='es-rename'){
+        // obsłużone w onchange poniżej, ale zostawiamy pusty branch dla spójności delegacji kliknięć
+      }
+      else if(a==='es-unit'){
+        const idx = +el.dataset.idx;
+        const s = findSession(editingSessionId);
+        s.entries[idx].unit = s.entries[idx].unit==='sec' ? 'reps' : 'sec';
+        await saveSessions();
+        render();
+      }
+      else if(a==='es-editval'){
+        const idx = +el.dataset.idx, si = +el.dataset.si;
+        const s = findSession(editingSessionId);
+        const entry = s.entries[idx];
+        const set = entry.sets[si];
+        const cur = set.value + (set.weight!=null ? 'x'+set.weight : '') + (set.note ? ' ('+set.note+')' : '');
+        const nn = prompt('Popraw serię (np. 10x60 albo 10x60 (uwaga)):', cur);
+        if(nn===null) return;
+        const parsed = parseSetsInput(nn, entry.unit);
+        if(parsed.length) entry.sets[si] = parsed[0];
+        await saveSessions();
+        render();
+      }
+      else if(a==='es-delset'){
+        const idx = +el.dataset.idx, si = +el.dataset.si;
+        if(!confirm('Usunąć tę serię?')) return;
+        const s = findSession(editingSessionId);
+        s.entries[idx].sets.splice(si,1);
+        await saveSessions();
+        render();
+      }
+      else if(a==='es-addset'){
+        const idx = +el.dataset.idx;
+        const card = el.closest('.ex-card');
+        const valInput = card.querySelector('[data-role="es-val"]');
+        const wInput = card.querySelector('[data-role="es-weight"]');
+        if(valInput.value===''){ valInput.focus(); return; }
+        const s = findSession(editingSessionId);
+        s.entries[idx].sets.push({ value:+valInput.value, weight: wInput.value===''?null:+wInput.value, note:'' });
+        await saveSessions();
+        render();
+      }
+      else if(a==='es-delentry'){
+        if(!confirm('Usunąć to ćwiczenie z tej sesji?')) return;
+        const idx = +el.dataset.idx;
+        const s = findSession(editingSessionId);
+        s.entries.splice(idx,1);
+        await saveSessions();
+        render();
+      }
+      else if(a==='es-addentry'){
+        const s = findSession(editingSessionId);
+        s.entries.push({ planExerciseId:null, plannedName:'Nowe ćwiczenie', performedName:'Nowe ćwiczenie', unit:'reps', context:'', sets:[] });
+        await saveSessions();
+        render();
+      }
+      else if(a==='es-delsession'){
+        if(!confirm('Usunąć całą tę sesję treningową? Tej operacji nie da się cofnąć.')) return;
+        sessions = sessions.filter(x=>x.id!==editingSessionId);
+        await saveSessions();
+        editingSessionId = null;
+        view = 'history'; render();
       }
       else if(a==='pe-tab'){ plansEditTab = el.dataset.plan; render(); }
       else if(a==='pe-add'){
@@ -943,6 +1065,29 @@ function bindEvents(){
       await stSet('plans', PLANS);
     };
   });
+  document.querySelectorAll('[data-action="es-rename"]').forEach(el=>{
+    el.onchange = async ()=>{
+      const s = findSession(editingSessionId);
+      s.entries[+el.dataset.idx].performedName = el.value || 'Ćwiczenie';
+      await saveSessions();
+    };
+  });
+  document.querySelectorAll('[data-action="es-ctx"]').forEach(el=>{
+    el.onchange = async ()=>{
+      const s = findSession(editingSessionId);
+      s.entries[+el.dataset.idx].context = el.value;
+      await saveSessions();
+    };
+  });
+  const esDateEl = document.getElementById('esDate');
+  if(esDateEl){
+    esDateEl.onchange = async ()=>{
+      const s = findSession(editingSessionId);
+      s.date = esDateEl.value;
+      sessions.sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+      await saveSessions();
+    };
+  }
   const peNameEl = document.querySelector('[data-action="pe-planname"]');
   if(peNameEl){
     peNameEl.onchange = async ()=>{
