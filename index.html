@@ -657,11 +657,24 @@ function renderBottomNav(){
   });
 }
 
+function currentRemaining(){
+  if(!timer.running) return 0;
+  return Math.max(0, Math.round((timer.endTime - Date.now())/1000));
+}
+
+async function persistRestTimer(){
+  await stSet('restTimer', { endTime: timer.endTime, total: timer.total, entryIdx: timer.entryIdx, exName: timer.exName });
+}
+async function clearPersistedRestTimer(){
+  await stSet('restTimer', null);
+}
+
 function renderRestBar(){
   let existing = document.getElementById('restBar');
   if(existing) existing.remove();
-  if(!timer.running) return;
-  const pct = timer.total>0 ? timer.remaining/timer.total : 0;
+  if(!timer.running || view!=='session') return;
+  const remaining = currentRemaining();
+  const pct = timer.total>0 ? remaining/timer.total : 0;
   const r = 24, c = 2*Math.PI*r;
   const off = c*(1-pct);
   const div = document.createElement('div');
@@ -674,7 +687,7 @@ function renderRestBar(){
         <circle cx="28" cy="28" r="${r}" stroke="var(--rest)" stroke-width="6" fill="none"
           stroke-dasharray="${c}" stroke-dashoffset="${off}" stroke-linecap="round"></circle>
       </svg>
-      <div class="n">${timer.remaining}</div>
+      <div class="n">${remaining}</div>
     </div>
     <div class="rest-info">
       <div class="lbl">Przerwa</div>
@@ -687,37 +700,66 @@ function renderRestBar(){
     </div>
   `;
   document.body.appendChild(div);
-  div.querySelector('#restMinusBtn').onclick = ()=>{
-    timer.remaining = Math.max(0, timer.remaining-15);
-    renderRestBar();
+  div.querySelector('#restMinusBtn').onclick = async ()=>{
+    timer.endTime = Math.max(Date.now(), timer.endTime - 15000);
+    await persistRestTimer();
+    tickRest();
   };
-  div.querySelector('#restPlusBtn').onclick = ()=>{
-    timer.remaining += 15;
-    timer.total = Math.max(timer.total, timer.remaining);
-    renderRestBar();
+  div.querySelector('#restPlusBtn').onclick = async ()=>{
+    timer.endTime += 15000;
+    timer.total = Math.max(timer.total, currentRemaining());
+    await persistRestTimer();
+    tickRest();
   };
-  div.querySelector('#restSkipBtn').onclick = ()=>{
+  div.querySelector('#restSkipBtn').onclick = async ()=>{
     if(timer.handle) clearInterval(timer.handle);
     timer.running = false;
+    await clearPersistedRestTimer();
     renderRestBar();
   };
 }
 
 function startRest(seconds, entryIdx, exName){
   if(timer.handle) clearInterval(timer.handle);
-  timer = { running:true, remaining:seconds, total:seconds, entryIdx, exName, handle:null };
-  timer.handle = setInterval(()=>{
-    timer.remaining--;
-    if(timer.remaining<=0){
-      clearInterval(timer.handle);
-      timer.running = false;
-      try{ if(navigator.vibrate) navigator.vibrate([200,80,200]); }catch(e){}
-      playBeep();
-    }
-    renderRestBar();
-  }, 1000);
+  timer = { running:true, endTime: Date.now()+seconds*1000, total:seconds, entryIdx, exName, handle:null };
+  persistRestTimer();
+  timer.handle = setInterval(tickRest, 500);
+  tickRest();
+}
+
+function tickRest(){
+  if(!timer.running) return;
+  const remaining = currentRemaining();
+  if(remaining<=0){
+    if(timer.handle) clearInterval(timer.handle);
+    timer.running = false;
+    clearPersistedRestTimer();
+    try{ if(navigator.vibrate) navigator.vibrate([200,80,200]); }catch(e){}
+    playBeep();
+  }
   renderRestBar();
 }
+
+let wakeLock = null;
+async function acquireWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock = null; });
+    }
+  }catch(e){ /* np. tryb oszczędzania baterii - ignorujemy, appka i tak działa */ }
+}
+function releaseWakeLock(){
+  try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible'){
+    if(view==='session' && !wakeLock) acquireWakeLock();
+    tickRest();
+  }
+});
+window.addEventListener('focus', ()=>{ tickRest(); });
+window.addEventListener('pageshow', ()=>{ tickRest(); });
 
 function playBeep(){
   try{
@@ -838,10 +880,11 @@ function bindEvents(){
           }))
         };
         await saveActive();
+        await acquireWakeLock();
         view = 'session'; render();
       }
-      else if(a==='resume'){ view='session'; render(); }
-      else if(a==='home'){ view='home'; render(); }
+      else if(a==='resume'){ await acquireWakeLock(); view='session'; render(); }
+      else if(a==='home'){ releaseWakeLock(); view='home'; render(); }
       else if(a==='history'){ view='history'; render(); }
       else if(a==='stats'){ view='stats'; render(); }
       else if(a==='calendar'){ calMonth = new Date(); view='calendar'; render(); }
@@ -1019,6 +1062,8 @@ function bindEvents(){
         await stSet('activeSession', null);
         if(timer.handle) clearInterval(timer.handle);
         timer.running=false;
+        await clearPersistedRestTimer();
+        releaseWakeLock();
         view='home'; render();
       }
       else if(a==='addset'){
@@ -1172,6 +1217,11 @@ window.addEventListener('error', (e)=>{ showFatalError(e.message||e); });
     active = await stGet('activeSession', null);
     restOverrides = await stGet('restOverrides', {});
     PLANS = await stGet('plans', clonePlans());
+    const savedTimer = await stGet('restTimer', null);
+    if(savedTimer && savedTimer.endTime && savedTimer.endTime > Date.now()){
+      timer = { running:true, endTime:savedTimer.endTime, total:savedTimer.total, entryIdx:savedTimer.entryIdx, exName:savedTimer.exName, handle:null };
+      timer.handle = setInterval(tickRest, 500);
+    }
     view = 'home';
     render();
   } catch(e){
